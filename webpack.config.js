@@ -52,8 +52,8 @@ module.exports = function (options) {
                     loader: 'raw'
                 },
                 {
-                    test: /\.jade$/,
-                    loader: 'babel!jade'
+                    test: /\.pug$/,
+                    loader: 'pug-loader'
                 }
             ]
         },

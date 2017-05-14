@@ -34,7 +34,7 @@ export default class SecurityService {
             backdrop: 'static',
             keyboard: true,
             modalFade: true,
-            template: require('../views/login_form.jade'),
+            template: require('../views/login_form.pug'),
             windowClass: 'rha-login-modal'
         };
         this.modalOptions = {

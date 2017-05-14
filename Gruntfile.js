@@ -15,7 +15,7 @@ module.exports = function (grunt) {
     require('load-grunt-tasks')(grunt);
     // Time how long tasks take. Can help when optimizing build times
     require('time-grunt')(grunt);
-    grunt.loadNpmTasks('grunt-contrib-jade');
+    grunt.loadNpmTasks('grunt-contrib-pug');
     grunt.loadNpmTasks('grunt-html2js');
     grunt.loadNpmTasks('grunt-newer');
     grunt.loadNpmTasks('grunt-ng-annotate');
@@ -167,7 +167,7 @@ module.exports = function (grunt) {
                 }]
             }
         },
-        jade: {
+        pug: {
             dist: {
                 options: {
                     pretty: false
@@ -176,7 +176,7 @@ module.exports = function (grunt) {
                     expand: true,
                     cwd: '<%= yeoman.app %>',
                     dest: '<%= yeoman.app %>',
-                    src: '**/*.jade',
+                    src: '**/*.pug',
                     ext: '.html'
                 }]
             }
@@ -346,7 +346,7 @@ module.exports = function (grunt) {
     //     grunt.task.run([
     //         'clean:server',
     //         'bower-install',
-    //         'newer:jade',
+    //         'newer:pug',
     //         'build'
     //     ]);
     // });
@@ -359,7 +359,7 @@ module.exports = function (grunt) {
     grunt.registerTask('build', [
         'clean:dist',
         // 'bower-install',
-        'newer:jade',
+        'newer:pug',
 	    // 'useminPrepare',
         'html2js',
         // 'concurrent:dist',

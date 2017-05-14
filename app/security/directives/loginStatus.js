@@ -4,6 +4,6 @@ export default function () {
     return {
         restrict: 'AE',
         scope: false,
-        template: require('../views/login_status.jade')
+        template: require('../views/login_status.pug')
     };
 }

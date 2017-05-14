@@ -3,7 +3,7 @@
 export default function () {
     return {
         scope: {},
-        template: require('../views/chatButton.jade'),
+        template: require('../views/chatButton.pug'),
         restrict: 'A',
         controller: 'ChatButton',
         link: function postLink(scope, element, attrs) {

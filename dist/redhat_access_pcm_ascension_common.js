@@ -50,26 +50,26 @@
 	    value: true
 	});
 
-	var _resourceTypes = __webpack_require__(11);
+	var _resourceTypes = __webpack_require__(3);
 
 	var _resourceTypes2 = _interopRequireDefault(_resourceTypes);
 
-	var _commonConfig = __webpack_require__(10);
+	var _commonConfig = __webpack_require__(2);
 
 	var _commonConfig2 = _interopRequireDefault(_commonConfig);
 
-	var _configurationService = __webpack_require__(36);
+	var _configurationService = __webpack_require__(28);
 
 	var _configurationService2 = _interopRequireDefault(_configurationService);
 
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-	__webpack_require__(43);
-	__webpack_require__(34);
+	__webpack_require__(35);
+	__webpack_require__(26);
 
 	var app = angular.module('RedhatAccess.common', ['RedhatAccess.ui-utils', 'angular-cache']).config(["CacheFactoryProvider", function (CacheFactoryProvider) {}]).constant('RESOURCE_TYPES', _resourceTypes2.default).value('COMMON_CONFIG', _commonConfig2.default).factory('configurationService', _configurationService2.default);
 
-	__webpack_require__(49);
+	__webpack_require__(41);
 
 	exports.default = app.name;
 
@@ -78,6 +78,8 @@
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
+
+	var pug_has_own_property = Object.prototype.hasOwnProperty;
 
 	/**
 	 * Merge two attribute objects giving precedence
@@ -91,27 +93,25 @@
 	 * @api private
 	 */
 
-	exports.merge = function merge(a, b) {
+	exports.merge = pug_merge;
+	function pug_merge(a, b) {
 	  if (arguments.length === 1) {
 	    var attrs = a[0];
 	    for (var i = 1; i < a.length; i++) {
-	      attrs = merge(attrs, a[i]);
+	      attrs = pug_merge(attrs, a[i]);
 	    }
 	    return attrs;
 	  }
-	  var ac = a['class'];
-	  var bc = b['class'];
-
-	  if (ac || bc) {
-	    ac = ac || [];
-	    bc = bc || [];
-	    if (!Array.isArray(ac)) ac = [ac];
-	    if (!Array.isArray(bc)) bc = [bc];
-	    a['class'] = ac.concat(bc).filter(nulls);
-	  }
 
 	  for (var key in b) {
-	    if (key != 'class') {
+	    if (key === 'class') {
+	      var valA = a[key] || [];
+	      a[key] = (Array.isArray(valA) ? valA : [valA]).concat(b[key] || []);
+	    } else if (key === 'style') {
+	      var valA = pug_style(a[key]);
+	      var valB = pug_style(b[key]);
+	      a[key] = valA + valB;
+	    } else {
 	      a[key] = b[key];
 	    }
 	  }
@@ -120,64 +120,81 @@
 	};
 
 	/**
-	 * Filter null `val`s.
+	 * Process array, object, or string as a string of classes delimited by a space.
 	 *
-	 * @param {*} val
-	 * @return {Boolean}
-	 * @api private
-	 */
-
-	function nulls(val) {
-	  return val != null && val !== '';
-	}
-
-	/**
-	 * join array as classes.
+	 * If `val` is an array, all members of it and its subarrays are counted as
+	 * classes. If `escaping` is an array, then whether or not the item in `val` is
+	 * escaped depends on the corresponding item in `escaping`. If `escaping` is
+	 * not an array, no escaping is done.
 	 *
-	 * @param {*} val
+	 * If `val` is an object, all the keys whose value is truthy are counted as
+	 * classes. No escaping is done.
+	 *
+	 * If `val` is a string, it is counted as a class. No escaping is done.
+	 *
+	 * @param {(Array.<string>|Object.<string, boolean>|string)} val
+	 * @param {?Array.<string>} escaping
 	 * @return {String}
 	 */
-	exports.joinClasses = joinClasses;
-	function joinClasses(val) {
-	  return (Array.isArray(val) ? val.map(joinClasses) :
-	    (val && typeof val === 'object') ? Object.keys(val).filter(function (key) { return val[key]; }) :
-	    [val]).filter(nulls).join(' ');
+	exports.classes = pug_classes;
+	function pug_classes_array(val, escaping) {
+	  var classString = '', className, padding = '', escapeEnabled = Array.isArray(escaping);
+	  for (var i = 0; i < val.length; i++) {
+	    className = pug_classes(val[i]);
+	    if (!className) continue;
+	    escapeEnabled && escaping[i] && (className = pug_escape(className));
+	    classString = classString + padding + className;
+	    padding = ' ';
+	  }
+	  return classString;
 	}
-
-	/**
-	 * Render the given classes.
-	 *
-	 * @param {Array} classes
-	 * @param {Array.<Boolean>} escaped
-	 * @return {String}
-	 */
-	exports.cls = function cls(classes, escaped) {
-	  var buf = [];
-	  for (var i = 0; i < classes.length; i++) {
-	    if (escaped && escaped[i]) {
-	      buf.push(exports.escape(joinClasses([classes[i]])));
-	    } else {
-	      buf.push(joinClasses(classes[i]));
+	function pug_classes_object(val) {
+	  var classString = '', padding = '';
+	  for (var key in val) {
+	    if (key && val[key] && pug_has_own_property.call(val, key)) {
+	      classString = classString + padding + key;
+	      padding = ' ';
 	    }
 	  }
-	  var text = joinClasses(buf);
-	  if (text.length) {
-	    return ' class="' + text + '"';
+	  return classString;
+	}
+	function pug_classes(val, escaping) {
+	  if (Array.isArray(val)) {
+	    return pug_classes_array(val, escaping);
+	  } else if (val && typeof val === 'object') {
+	    return pug_classes_object(val);
 	  } else {
-	    return '';
+	    return val || '';
 	  }
-	};
+	}
 
+	/**
+	 * Convert object or string to a string of CSS styles delimited by a semicolon.
+	 *
+	 * @param {(Object.<string, string>|string)} val
+	 * @return {String}
+	 */
 
-	exports.style = function (val) {
-	  if (val && typeof val === 'object') {
-	    return Object.keys(val).map(function (style) {
-	      return style + ':' + val[style];
-	    }).join(';');
+	exports.style = pug_style;
+	function pug_style(val) {
+	  if (!val) return '';
+	  if (typeof val === 'object') {
+	    var out = '';
+	    for (var style in val) {
+	      /* istanbul ignore else */
+	      if (pug_has_own_property.call(val, style)) {
+	        out = out + style + ':' + val[style] + ';';
+	      }
+	    }
+	    return out;
 	  } else {
+	    val += '';
+	    if (val[val.length - 1] !== ';') 
+	      return val + ';';
 	    return val;
 	  }
 	};
+
 	/**
 	 * Render the given attribute.
 	 *
@@ -187,67 +204,55 @@
 	 * @param {Boolean} terse
 	 * @return {String}
 	 */
-	exports.attr = function attr(key, val, escaped, terse) {
-	  if (key === 'style') {
-	    val = exports.style(val);
+	exports.attr = pug_attr;
+	function pug_attr(key, val, escaped, terse) {
+	  if (val === false || val == null || !val && (key === 'class' || key === 'style')) {
+	    return '';
 	  }
-	  if ('boolean' == typeof val || null == val) {
-	    if (val) {
-	      return ' ' + (terse ? key : key + '="' + key + '"');
-	    } else {
-	      return '';
-	    }
-	  } else if (0 == key.indexOf('data') && 'string' != typeof val) {
-	    if (JSON.stringify(val).indexOf('&') !== -1) {
-	      console.warn('Since Jade 2.0.0, ampersands (`&`) in data attributes ' +
-	                   'will be escaped to `&amp;`');
-	    };
-	    if (val && typeof val.toISOString === 'function') {
-	      console.warn('Jade will eliminate the double quotes around dates in ' +
-	                   'ISO form after 2.0.0');
-	    }
-	    return ' ' + key + "='" + JSON.stringify(val).replace(/'/g, '&apos;') + "'";
-	  } else if (escaped) {
-	    if (val && typeof val.toISOString === 'function') {
-	      console.warn('Jade will stringify dates in ISO form after 2.0.0');
-	    }
-	    return ' ' + key + '="' + exports.escape(val) + '"';
-	  } else {
-	    if (val && typeof val.toISOString === 'function') {
-	      console.warn('Jade will stringify dates in ISO form after 2.0.0');
-	    }
-	    return ' ' + key + '="' + val + '"';
+	  if (val === true) {
+	    return ' ' + (terse ? key : key + '="' + key + '"');
 	  }
+	  if (typeof val.toJSON === 'function') {
+	    val = val.toJSON();
+	  }
+	  if (typeof val !== 'string') {
+	    val = JSON.stringify(val);
+	    if (!escaped && val.indexOf('"') !== -1) {
+	      return ' ' + key + '=\'' + val.replace(/'/g, '&#39;') + '\'';
+	    }
+	  }
+	  if (escaped) val = pug_escape(val);
+	  return ' ' + key + '="' + val + '"';
 	};
 
 	/**
 	 * Render the given attributes object.
 	 *
 	 * @param {Object} obj
-	 * @param {Object} escaped
+	 * @param {Object} terse whether to use HTML5 terse boolean attributes
 	 * @return {String}
 	 */
-	exports.attrs = function attrs(obj, terse){
-	  var buf = [];
+	exports.attrs = pug_attrs;
+	function pug_attrs(obj, terse){
+	  var attrs = '';
 
-	  var keys = Object.keys(obj);
+	  for (var key in obj) {
+	    if (pug_has_own_property.call(obj, key)) {
+	      var val = obj[key];
 
-	  if (keys.length) {
-	    for (var i = 0; i < keys.length; ++i) {
-	      var key = keys[i]
-	        , val = obj[key];
-
-	      if ('class' == key) {
-	        if (val = joinClasses(val)) {
-	          buf.push(' ' + key + '="' + val + '"');
-	        }
-	      } else {
-	        buf.push(exports.attr(key, val, false, terse));
+	      if ('class' === key) {
+	        val = pug_classes(val);
+	        attrs = pug_attr(key, val, false, terse) + attrs;
+	        continue;
 	      }
+	      if ('style' === key) {
+	        val = pug_style(val);
+	      }
+	      attrs += pug_attr(key, val, false, terse);
 	    }
 	  }
 
-	  return buf.join('');
+	  return attrs;
 	};
 
 	/**
@@ -258,36 +263,44 @@
 	 * @api private
 	 */
 
-	var jade_encode_html_rules = {
-	  '&': '&amp;',
-	  '<': '&lt;',
-	  '>': '&gt;',
-	  '"': '&quot;'
-	};
-	var jade_match_html = /[&<>"]/g;
+	var pug_match_html = /["&<>]/;
+	exports.escape = pug_escape;
+	function pug_escape(_html){
+	  var html = '' + _html;
+	  var regexResult = pug_match_html.exec(html);
+	  if (!regexResult) return _html;
 
-	function jade_encode_char(c) {
-	  return jade_encode_html_rules[c] || c;
-	}
-
-	exports.escape = jade_escape;
-	function jade_escape(html){
-	  var result = String(html).replace(jade_match_html, jade_encode_char);
-	  if (result === '' + html) return html;
+	  var result = '';
+	  var i, lastIndex, escape;
+	  for (i = regexResult.index, lastIndex = 0; i < html.length; i++) {
+	    switch (html.charCodeAt(i)) {
+	      case 34: escape = '&quot;'; break;
+	      case 38: escape = '&amp;'; break;
+	      case 60: escape = '&lt;'; break;
+	      case 62: escape = '&gt;'; break;
+	      default: continue;
+	    }
+	    if (lastIndex !== i) result += html.substring(lastIndex, i);
+	    lastIndex = i + 1;
+	    result += escape;
+	  }
+	  if (lastIndex !== i) return result + html.substring(lastIndex, i);
 	  else return result;
 	};
 
 	/**
 	 * Re-throw the given `err` in context to the
-	 * the jade in `filename` at the given `lineno`.
+	 * the pug in `filename` at the given `lineno`.
 	 *
 	 * @param {Error} err
 	 * @param {String} filename
 	 * @param {String} lineno
+	 * @param {String} str original source
 	 * @api private
 	 */
 
-	exports.rethrow = function rethrow(err, filename, lineno, str){
+	exports.rethrow = pug_rethrow;
+	function pug_rethrow(err, filename, lineno, str){
 	  if (!(err instanceof Error)) throw err;
 	  if ((typeof window != 'undefined' || !filename) && !str) {
 	    err.message += ' on line ' + lineno;
@@ -296,7 +309,7 @@
 	  try {
 	    str = str || __webpack_require__(53).readFileSync(filename, 'utf8')
 	  } catch (ex) {
-	    rethrow(err, null, lineno)
+	    pug_rethrow(err, null, lineno)
 	  }
 	  var context = 3
 	    , lines = str.split('\n')
@@ -314,147 +327,14 @@
 
 	  // Alter exception message
 	  err.path = filename;
-	  err.message = (filename || 'Jade') + ':' + lineno
+	  err.message = (filename || 'Pug') + ':' + lineno
 	    + '\n' + context + '\n\n' + err.message;
 	  throw err;
 	};
 
-	exports.DebugItem = function DebugItem(lineno, filename) {
-	  this.lineno = lineno;
-	  this.filename = filename;
-	}
-
 
 /***/ },
 /* 2 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-
-	var jade = __webpack_require__(1);
-
-	module.exports = function template(locals) {
-	  var buf = [];
-	  var jade_mixins = {};
-	  var jade_interp;
-
-	  buf.push("<div id=\"outageHead\" ng-show=\"(!securityService.loginStatus.userAllowedToManageCases || HeaderService.showPartnerEscalationError) &amp;&amp; !COMMON_CONFIG.isGS4\"><div id=\"errornoDirectSupport403\"><h1 translate=\"\">Support Subscription Required</h1><p translate=\"\">The credentials you provided are valid, but you do not have<b>direct support from Red Hat.</b></p><p translate=\"\">If you believe you should have permission to view this resource, please<a href=\"/support/contact/customerService.html\">contact Customer Service</a>for assistance. Your Red Hat login might not be associated with the right account for your organization,\nor there might be an issue with your subscription. Either way, Customer Service should be able to help\nyou resolve the problem.</p></div></div>");;return buf.join("");
-	};
-
-/***/ },
-/* 3 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-
-	var jade = __webpack_require__(1);
-
-	module.exports = function template(locals) {
-	  var buf = [];
-	  var jade_mixins = {};
-	  var jade_interp;
-
-	  buf.push("<div ng-show=\"HeaderService.pageLoadFailure &amp;&amp; securityService.loginStatus.userAllowedToManageCases &amp;&amp; !COMMON_CONFIG.isGS4\"><pre class=\"console\"> \n    d8888   .d8888b.      d8888  \n   d8P888  d88P  Y88b    d8P888  \n  d8P 888  888    888   d8P 888  \n d8P  888  888    888  d8P  888  \nd88   888  888    888 d88   888  \n8888888888 888    888 8888888888 \n      888  Y88b  d88P       888  \n      888   \"Y8888P\"        888  \n<br />\n<br /><span translate=\"\" class=\"console-error\">Not Found</span><p translate=\"\">The page you are looking for is not here. It might have been moved, removed, or had its name and address changed. It might otherwise be temporarily unavailable for technical reasons.</p></pre></div>");;return buf.join("");
-	};
-
-/***/ },
-/* 4 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-
-	var jade = __webpack_require__(1);
-
-	module.exports = function template(locals) {
-	  var buf = [];
-	  var jade_mixins = {};
-	  var jade_interp;
-
-	  buf.push("<div ng-hide=\"HeaderService.pageLoadFailure || !securityService.loginStatus.userAllowedToManageCases\"><a style=\"float: right\" ng-show=\"AlertService.alerts.length &gt; 1\" ng-href=\"\" ng-click=\"dismissAlerts()\">{{'Close messages'|translate}}</a><uib-alert ng-repeat=\"alert in AlertService.alerts\" type=\"{{alert.type}}\" close=\"closeAlert($index)\"><span ng-show=\"alert.type==='info' || alert.isHtml\" ng-bind-html=\"alert.message\" class=\"icon-innov-prev alert-icon\"></span><span ng-hide=\"alert.type==='info' || alert.isHtml\">{{alert.message}}</span></uib-alert></div>");;return buf.join("");
-	};
-
-/***/ },
-/* 5 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-
-	var jade = __webpack_require__(1);
-
-	module.exports = function template(locals) {
-	  var buf = [];
-	  var jade_mixins = {};
-	  var jade_interp;
-
-	  buf.push("<div ng-show=\"showChat\" class=\"chat\"><iframe style=\"display: none;\" ng-src=\"{{chatHackUrl}}\"></iframe><a ng-show=\"chatAvailable\" ng-click=\"openChatWindow()\" style=\"cursor: pointer\" class=\"link\">{{'Chat with Support'|translate}}&nbsp;<!--i.fa.fa-comments--></a><span ng-show=\"!chatAvailable\" disabled>{{'Chat Offline'|translate}}&nbsp;<!--i.fa.fa-comments--></span></div>");;return buf.join("");
-	};
-
-/***/ },
-/* 6 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-
-	var jade = __webpack_require__(1);
-
-	module.exports = function template(locals) {
-	  var buf = [];
-	  var jade_mixins = {};
-	  var jade_interp;
-
-	  buf.push("<div rha-403error=\"\"></div><div rha-404error=\"\"></div><div ng-show=\"HeaderService.sfdcIsHealthy\"></div><div rha-alert=\"\"></div><div ng-hide=\"failedToLoadCase || !securityService.loginStatus.userAllowedToManageCases\"><div ng-show=\"pageLoading\" class=\"spinner spinner-inline\"></div></div><div ng-hide=\"HeaderService.pageLoadFailure || !securityService.loginStatus.userAllowedToManageCases\" class=\"page-header\"><div ng-hide=\"page ===&quot;&quot;\" rha-titletemplate=\"\" page=\"{{page}}\"></div><div ng-show=\"page === &quot;caseView&quot;\">Filed on&nbsp;</div><div ng-show=\"securityService.loginStatus.isLoggedIn &amp;&amp; securityService.loginStatus.authedUser.has_chat &amp;&amp; HeaderService.sfdcIsHealthy\" rha-chatbutton=\"\"></div></div><div rha-loginstatus=\"\"></div><div ng-show=\"!HeaderService.sfdcIsHealthy\" ng-bind-html=\"parseSfdcOutageHtml()\"></div>");;return buf.join("");
-	};
-
-/***/ },
-/* 7 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-
-	var jade = __webpack_require__(1);
-
-	module.exports = function template(locals) {
-	  var buf = [];
-	  var jade_mixins = {};
-	  var jade_interp;
-
-	  buf.push("<h1 ng-show=\"COMMON_CONFIG.showTitle\" class=\"page-title\">{{getPageTitle()}}</h1>");;return buf.join("");
-	};
-
-/***/ },
-/* 8 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-
-	var jade = __webpack_require__(1);
-
-	module.exports = function template(locals) {
-	  var buf = [];
-	  var jade_mixins = {};
-	  var jade_interp;
-
-	  buf.push("<div id=\"rha-login-modal-header\" class=\"modal-header\"><h3 translate=\"\">Sign into the Red Hat Customer Portal</h3></div><div class=\"container-fluid\"><div id=\"rha-login-modal-body\" class=\"modal-body form-horizontal\"><!-- form ng-submit=\"modalOptions.ok()\"  method=\"post\"--><div ng-show=\"useVerboseLoginView\" class=\"form-group\">{{'Red Hat Access makes it easy for you to self-solve issues, diagnose problems, and engage with us via the Red Hat Customer Portal. To access Red Hat Customer Portal resources, you must enter valid portal credentials.'|translate}}</div><div ng-show=\"authError\" class=\"alert alert-danger\">{{authError}}</div><div id=\"rha-login-modal-user-id\" class=\"form-group\"><label for=\"rha-login-user-id\" translate=\"\" class=\"control-label\">Red Hat Login</label><div><input id=\"rha-login-user-id\" type=\"text\" placeholder=\"{{'Red Hat Login'|translate}}\" ng-model=\"user.user\" required=\"\" autofocus=\"\" class=\"form-control\"></div></div><div id=\"rha-login-modal-user-pass\" class=\"form-group\"><label for=\"rha-login-password\" translate=\"\" class=\"control-label\">Password</label><div><input id=\"rha-login-password\" type=\"password\" placeholder=\"{{'Password'|translate}}\" ng-model=\"user.password\" required=\"\" class=\"form-control\"></div></div><div style=\"font-size:smaller\" ng-show=\"useVerboseLoginView\" class=\"form-group\"><strong>{{'Note:'|translate}}</strong>{{'Red Hat Customer Portal credentials differ from the credentials used to log into this product.'|translate}}</div><!-- /form--></div><div class=\"modal-footer\"><div id=\"rha-login-modal-buttons\" class=\"form-group\"><span class=\"pull-right\"><button ng-click=\"modalOptions.close()\" type=\"submit\" translate=\"\" class=\"btn btn-md cancel\">Cancel</button><button ng-click=\"modalOptions.ok()\" type=\"submit\" translate=\"\" ng-disabled=\"status.authenticating\" class=\"btn btn-primary btn-md login\">Sign in</button></span></div></div></div>");;return buf.join("");
-	};
-
-/***/ },
-/* 9 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-
-	var jade = __webpack_require__(1);
-
-	module.exports = function template(locals) {
-	  var buf = [];
-	  var jade_mixins = {};
-	  var jade_interp;
-
-	  buf.push("<div ng-controller=\"SecurityController\" ng-show=\"displayLoginStatus()\"><div class=\"row\"><div class=\"col-sm-12\"><span ng-show=\"securityService.loginStatus.isLoggedIn\" class=\"pull-right rha-logged-in\">{{'Logged into the Red Hat Customer Portal as'|translate}} {{securityService.loginStatus.authedUser.loggedInUser}}  <span ng-if=\"securityService.logoutURL.length === 0\" ng-show=\"!securityService.loginStatus.verifying\"><a href=\"\" ng-click=\"securityService.logout()\"> {{'Log Out'|translate}}</a></span><span ng-if=\"securityService.logoutURL.length &gt; 0\" ng-show=\"!securityService.loginStatus.verifying\"><a href=\"{{securityService.logoutURL}}\"> {{'Log Out'|translate}}</a></span><span ng-show=\"securityService.loginStatus.verifying\">{{'Log Out'|translate}}</span></span><span ng-show=\"!securityService.loginStatus.isLoggedIn\" class=\"pull-right rha-logged-out\">{{'Not Logged into the Red Hat Customer Portal'|translate}} <span ng-if=\"securityService.loginURL.length === 0\" ng-show=\"!securityService.loginStatus.verifying\"><a href=\"\" ng-click=\"securityService.login()\"> {{'Log In'|translate}}</a></span><span ng-if=\"securityService.loginURL.length &gt; 0\" ng-show=\"!securityService.loginStatus.verifying\"><a href=\"{{securityService.loginURL}}\"> {{'Log In'|translate}}</a></span><span ng-show=\"securityService.loginStatus.verifying\">{{'Log In'|translate}}</span></span></div></div></div>");;return buf.join("");
-	};
-
-/***/ },
-/* 10 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -473,7 +353,7 @@
 	};
 
 /***/ },
-/* 11 */
+/* 3 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -487,7 +367,7 @@
 	};
 
 /***/ },
-/* 12 */
+/* 4 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -522,7 +402,7 @@
 	exports.default = FourOhThree;
 
 /***/ },
-/* 13 */
+/* 5 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -546,7 +426,7 @@
 	exports.default = FourOhFour;
 
 /***/ },
-/* 14 */
+/* 6 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -578,7 +458,7 @@
 	exports.default = AlertController;
 
 /***/ },
-/* 15 */
+/* 7 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -705,7 +585,7 @@
 	exports.default = ChatButton;
 
 /***/ },
-/* 16 */
+/* 8 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -770,7 +650,7 @@
 	exports.default = HeaderController;
 
 /***/ },
-/* 17 */
+/* 9 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -818,7 +698,7 @@
 	exports.default = TitleViewCtrl;
 
 /***/ },
-/* 18 */
+/* 10 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -829,14 +709,14 @@
 
 	exports.default = function () {
 	    return {
-	        template: __webpack_require__(2),
+	        template: __webpack_require__(43),
 	        restrict: 'A',
 	        controller: '403'
 	    };
 	};
 
 /***/ },
-/* 19 */
+/* 11 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -847,14 +727,14 @@
 
 	exports.default = function () {
 	    return {
-	        template: __webpack_require__(3),
+	        template: __webpack_require__(44),
 	        restrict: 'A',
 	        controller: '404'
 	    };
 	};
 
 /***/ },
-/* 20 */
+/* 12 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -865,14 +745,14 @@
 
 	exports.default = function () {
 	    return {
-	        template: __webpack_require__(4),
+	        template: __webpack_require__(45),
 	        restrict: 'A',
 	        controller: 'AlertController'
 	    };
 	};
 
 /***/ },
-/* 21 */
+/* 13 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -895,7 +775,7 @@
 	}];
 
 /***/ },
-/* 22 */
+/* 14 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -907,7 +787,7 @@
 	exports.default = function () {
 	    return {
 	        scope: {},
-	        template: __webpack_require__(5),
+	        template: __webpack_require__(46),
 	        restrict: 'A',
 	        controller: 'ChatButton',
 	        link: function postLink(scope, element, attrs) {
@@ -919,7 +799,7 @@
 	};
 
 /***/ },
-/* 23 */
+/* 15 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -955,7 +835,7 @@
 	}];
 
 /***/ },
-/* 24 */
+/* 16 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -978,7 +858,7 @@
 	};
 
 /***/ },
-/* 25 */
+/* 17 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1004,7 +884,7 @@
 	};
 
 /***/ },
-/* 26 */
+/* 18 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -1015,7 +895,7 @@
 
 	exports.default = function () {
 	    return {
-	        template: __webpack_require__(6),
+	        template: __webpack_require__(47),
 	        restrict: 'A',
 	        scope: { page: '@' },
 	        controller: 'HeaderController'
@@ -1023,7 +903,7 @@
 	};
 
 /***/ },
-/* 27 */
+/* 19 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1042,7 +922,7 @@
 	};
 
 /***/ },
-/* 28 */
+/* 20 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1079,7 +959,7 @@
 	}];
 
 /***/ },
-/* 29 */
+/* 21 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1121,7 +1001,7 @@
 	}];
 
 /***/ },
-/* 30 */
+/* 22 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -1134,13 +1014,13 @@
 	    return {
 	        restrict: 'AE',
 	        scope: { page: '@' },
-	        template: __webpack_require__(7),
+	        template: __webpack_require__(48),
 	        controller: 'TitleViewCtrl'
 	    };
 	};
 
 /***/ },
-/* 31 */
+/* 23 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1175,7 +1055,7 @@
 	}];
 
 /***/ },
-/* 32 */
+/* 24 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1292,7 +1172,7 @@
 	};
 
 /***/ },
-/* 33 */
+/* 25 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1310,7 +1190,7 @@
 	}];
 
 /***/ },
-/* 34 */
+/* 26 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -1321,79 +1201,79 @@
 	  value: true
 	});
 
-	var _ = __webpack_require__(12);
+	var _ = __webpack_require__(4);
 
 	var _2 = _interopRequireDefault(_);
 
-	var _3 = __webpack_require__(13);
+	var _3 = __webpack_require__(5);
 
 	var _4 = _interopRequireDefault(_3);
 
-	var _alert = __webpack_require__(14);
+	var _alert = __webpack_require__(6);
 
 	var _alert2 = _interopRequireDefault(_alert);
 
-	var _chatButton = __webpack_require__(15);
+	var _chatButton = __webpack_require__(7);
 
 	var _chatButton2 = _interopRequireDefault(_chatButton);
 
-	var _header = __webpack_require__(16);
+	var _header = __webpack_require__(8);
 
 	var _header2 = _interopRequireDefault(_header);
 
-	var _titleView = __webpack_require__(17);
+	var _titleView = __webpack_require__(9);
 
 	var _titleView2 = _interopRequireDefault(_titleView);
 
-	var _5 = __webpack_require__(18);
+	var _5 = __webpack_require__(10);
 
 	var _6 = _interopRequireDefault(_5);
 
-	var _7 = __webpack_require__(19);
+	var _7 = __webpack_require__(11);
 
 	var _8 = _interopRequireDefault(_7);
 
-	var _alert3 = __webpack_require__(20);
+	var _alert3 = __webpack_require__(12);
 
 	var _alert4 = _interopRequireDefault(_alert3);
 
-	var _chatButton3 = __webpack_require__(22);
+	var _chatButton3 = __webpack_require__(14);
 
 	var _chatButton4 = _interopRequireDefault(_chatButton3);
 
-	var _header3 = __webpack_require__(26);
+	var _header3 = __webpack_require__(18);
 
 	var _header4 = _interopRequireDefault(_header3);
 
-	var _onChange = __webpack_require__(27);
+	var _onChange = __webpack_require__(19);
 
 	var _onChange2 = _interopRequireDefault(_onChange);
 
-	var _titleTemplate = __webpack_require__(30);
+	var _titleTemplate = __webpack_require__(22);
 
 	var _titleTemplate2 = _interopRequireDefault(_titleTemplate);
 
-	var _autoFocus = __webpack_require__(21);
+	var _autoFocus = __webpack_require__(13);
 
 	var _autoFocus2 = _interopRequireDefault(_autoFocus);
 
-	var _alertService = __webpack_require__(35);
+	var _alertService = __webpack_require__(27);
 
 	var _alertService2 = _interopRequireDefault(_alertService);
 
-	var _constantsService = __webpack_require__(37);
+	var _constantsService = __webpack_require__(29);
 
 	var _constantsService2 = _interopRequireDefault(_constantsService);
 
-	var _headerService = __webpack_require__(38);
+	var _headerService = __webpack_require__(30);
 
 	var _headerService2 = _interopRequireDefault(_headerService);
 
-	var _strataService = __webpack_require__(40);
+	var _strataService = __webpack_require__(32);
 
 	var _strataService2 = _interopRequireDefault(_strataService);
 
-	var _udsService = __webpack_require__(42);
+	var _udsService = __webpack_require__(34);
 
 	var _udsService2 = _interopRequireDefault(_udsService);
 
@@ -1435,7 +1315,7 @@
 	exports.default = app.name;
 
 /***/ },
-/* 35 */
+/* 27 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1533,7 +1413,7 @@
 	exports.default = AlertService;
 
 /***/ },
-/* 36 */
+/* 28 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1557,7 +1437,7 @@
 	}];
 
 /***/ },
-/* 37 */
+/* 29 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1699,7 +1579,7 @@
 	exports.default = ConstantsService;
 
 /***/ },
-/* 38 */
+/* 30 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1707,8 +1587,6 @@
 	Object.defineProperty(exports, "__esModule", {
 	    value: true
 	});
-
-	var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
 	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
@@ -1723,29 +1601,21 @@
 	    this.showSurvey = true;
 	    this.showPartnerEscalationError = false;
 	    this.checkSfdcHealth = function () {
-	        var _this = this;
-
 	        if (securityService.loginStatus.isLoggedIn) {
-	            var _ret = function () {
-	                var deferred = $q.defer();
-	                strataService.health.sfdc().then(angular.bind(_this, function (response) {
-	                    if (response.name === 'SFDC' && response.status === true) {
-	                        service.sfdcIsHealthy = true;
-	                    }
-	                    deferred.resolve(response);
-	                }), angular.bind(_this, function (error) {
-	                    if (error.xhr.status === 502) {
-	                        service.sfdcIsHealthy = false;
-	                    }
-	                    AlertService.addStrataErrorMessage(error);
-	                    deferred.reject();
-	                }));
-	                return {
-	                    v: deferred.promise
-	                };
-	            }();
-
-	            if ((typeof _ret === 'undefined' ? 'undefined' : _typeof(_ret)) === "object") return _ret.v;
+	            var deferred = $q.defer();
+	            strataService.health.sfdc().then(angular.bind(this, function (response) {
+	                if (response.name === 'SFDC' && response.status === true) {
+	                    service.sfdcIsHealthy = true;
+	                }
+	                deferred.resolve(response);
+	            }), angular.bind(this, function (error) {
+	                if (error.xhr.status === 502) {
+	                    service.sfdcIsHealthy = false;
+	                }
+	                AlertService.addStrataErrorMessage(error);
+	                deferred.reject();
+	            }));
+	            return deferred.promise;
 	        }
 	    };
 	};
@@ -1754,7 +1624,7 @@
 	exports.default = HeaderService;
 
 /***/ },
-/* 39 */
+/* 31 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1821,7 +1691,7 @@
 	exports.default = RHAUtils;
 
 /***/ },
-/* 40 */
+/* 32 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -2697,7 +2567,7 @@
 	exports.default = StrataService;
 
 /***/ },
-/* 41 */
+/* 33 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -2715,7 +2585,7 @@
 	}];
 
 /***/ },
-/* 42 */
+/* 34 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -3126,7 +2996,7 @@
 	exports.default = UdsService;
 
 /***/ },
-/* 43 */
+/* 35 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -3137,43 +3007,43 @@
 	  value: true
 	});
 
-	var _rhaUtils = __webpack_require__(39);
+	var _rhaUtils = __webpack_require__(31);
 
 	var _rhaUtils2 = _interopRequireDefault(_rhaUtils);
 
-	var _translate = __webpack_require__(41);
+	var _translate = __webpack_require__(33);
 
 	var _translate2 = _interopRequireDefault(_translate);
 
-	var _trust = __webpack_require__(33);
+	var _trust = __webpack_require__(25);
 
 	var _trust2 = _interopRequireDefault(_trust);
 
-	var _enter = __webpack_require__(25);
+	var _enter = __webpack_require__(17);
 
 	var _enter2 = _interopRequireDefault(_enter);
 
-	var _resizable = __webpack_require__(29);
+	var _resizable = __webpack_require__(21);
 
 	var _resizable2 = _interopRequireDefault(_resizable);
 
-	var _choice = __webpack_require__(23);
+	var _choice = __webpack_require__(15);
 
 	var _choice2 = _interopRequireDefault(_choice);
 
-	var _optionsDisabled = __webpack_require__(28);
+	var _optionsDisabled = __webpack_require__(20);
 
 	var _optionsDisabled2 = _interopRequireDefault(_optionsDisabled);
 
-	var _choicetree = __webpack_require__(24);
+	var _choicetree = __webpack_require__(16);
 
 	var _choicetree2 = _interopRequireDefault(_choicetree);
 
-	var _treeViewSelectorData = __webpack_require__(31);
+	var _treeViewSelectorData = __webpack_require__(23);
 
 	var _treeViewSelectorData2 = _interopRequireDefault(_treeViewSelectorData);
 
-	var _treeViewSelectorUtils = __webpack_require__(32);
+	var _treeViewSelectorUtils = __webpack_require__(24);
 
 	var _treeViewSelectorUtils2 = _interopRequireDefault(_treeViewSelectorUtils);
 
@@ -3212,7 +3082,7 @@
 	exports.default = app.name;
 
 /***/ },
-/* 44 */
+/* 36 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -3231,7 +3101,7 @@
 	};
 
 /***/ },
-/* 45 */
+/* 37 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -3242,7 +3112,7 @@
 	exports.default = { verbose: true };
 
 /***/ },
-/* 46 */
+/* 38 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -3259,7 +3129,7 @@
 	};
 
 /***/ },
-/* 47 */
+/* 39 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -3288,7 +3158,7 @@
 	exports.default = SecurityController;
 
 /***/ },
-/* 48 */
+/* 40 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -3301,12 +3171,12 @@
 	    return {
 	        restrict: 'AE',
 	        scope: false,
-	        template: __webpack_require__(9)
+	        template: __webpack_require__(50)
 	    };
 	};
 
 /***/ },
-/* 49 */
+/* 41 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -3317,27 +3187,27 @@
 	    value: true
 	});
 
-	var _securityController = __webpack_require__(47);
+	var _securityController = __webpack_require__(39);
 
 	var _securityController2 = _interopRequireDefault(_securityController);
 
-	var _loginStatus = __webpack_require__(48);
+	var _loginStatus = __webpack_require__(40);
 
 	var _loginStatus2 = _interopRequireDefault(_loginStatus);
 
-	var _securityService = __webpack_require__(50);
+	var _securityService = __webpack_require__(42);
 
 	var _securityService2 = _interopRequireDefault(_securityService);
 
-	var _authEvents = __webpack_require__(44);
+	var _authEvents = __webpack_require__(36);
 
 	var _authEvents2 = _interopRequireDefault(_authEvents);
 
-	var _loginViewConfig = __webpack_require__(45);
+	var _loginViewConfig = __webpack_require__(37);
 
 	var _loginViewConfig2 = _interopRequireDefault(_loginViewConfig);
 
-	var _securityConfig = __webpack_require__(46);
+	var _securityConfig = __webpack_require__(38);
 
 	var _securityConfig2 = _interopRequireDefault(_securityConfig);
 
@@ -3364,7 +3234,7 @@
 	exports.default = app.name;
 
 /***/ },
-/* 50 */
+/* 42 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -3412,7 +3282,7 @@
 	        backdrop: 'static',
 	        keyboard: true,
 	        modalFade: true,
-	        template: __webpack_require__(8),
+	        template: __webpack_require__(49),
 	        windowClass: 'rha-login-modal'
 	    };
 	    this.modalOptions = {
@@ -3656,6 +3526,78 @@
 	exports.default = SecurityService;
 
 /***/ },
+/* 43 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var pug = __webpack_require__(1);
+
+	function template(locals) {var pug_html = "", pug_mixins = {}, pug_interp;pug_html = pug_html + "\u003Cdiv id=\"outageHead\" ng-show=\"(!securityService.loginStatus.userAllowedToManageCases || HeaderService.showPartnerEscalationError) &amp;&amp; !COMMON_CONFIG.isGS4\"\u003E\u003Cdiv id=\"errornoDirectSupport403\"\u003E\u003Ch1 translate=\"\"\u003ESupport Subscription Required\u003C\u002Fh1\u003E\u003Cp translate=\"\"\u003EThe credentials you provided are valid, but you do not have\u003Cb\u003Edirect support from Red Hat.\u003C\u002Fb\u003E\u003C\u002Fp\u003E\u003Cp translate=\"\"\u003EIf you believe you should have permission to view this resource, please\u003Ca href=\"\u002Fsupport\u002Fcontact\u002FcustomerService.html\"\u003Econtact Customer Service\u003C\u002Fa\u003Efor assistance. Your Red Hat login might not be associated with the right account for your organization,\nor there might be an issue with your subscription. Either way, Customer Service should be able to help\nyou resolve the problem.\u003C\u002Fp\u003E\u003C\u002Fdiv\u003E\u003C\u002Fdiv\u003E";;return pug_html;};
+	module.exports = template;
+
+/***/ },
+/* 44 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var pug = __webpack_require__(1);
+
+	function template(locals) {var pug_html = "", pug_mixins = {}, pug_interp;pug_html = pug_html + "\u003Cdiv ng-show=\"HeaderService.pageLoadFailure &amp;&amp; securityService.loginStatus.userAllowedToManageCases &amp;&amp; !COMMON_CONFIG.isGS4\"\u003E\u003Cpre class=\"console\"\u003E     d8888   .d8888b.      d8888  \n   d8P888  d88P  Y88b    d8P888  \n  d8P 888  888    888   d8P 888  \n d8P  888  888    888  d8P  888  \nd88   888  888    888 d88   888  \n8888888888 888    888 8888888888 \n      888  Y88b  d88P       888  \n      888   \"Y8888P\"        888  \u003Cbr \u002F\u003E\n\u003Cbr \u002F\u003E\u003Cspan class=\"console-error\" translate=\"\"\u003ENot Found\u003C\u002Fspan\u003E\u003Cp translate=\"\"\u003EThe page you are looking for is not here. It might have been moved, removed, or had its name and address changed. It might otherwise be temporarily unavailable for technical reasons.\u003C\u002Fp\u003E\u003C\u002Fpre\u003E\u003C\u002Fdiv\u003E";;return pug_html;};
+	module.exports = template;
+
+/***/ },
+/* 45 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var pug = __webpack_require__(1);
+
+	function template(locals) {var pug_html = "", pug_mixins = {}, pug_interp;pug_html = pug_html + "\u003Cdiv ng-hide=\"HeaderService.pageLoadFailure || !securityService.loginStatus.userAllowedToManageCases\"\u003E\u003Ca style=\"float: right;\" ng-show=\"AlertService.alerts.length &gt; 1\" ng-href=\"\" ng-click=\"dismissAlerts()\"\u003E{{'Close messages'|translate}}\u003C\u002Fa\u003E\u003Cuib-alert ng-repeat=\"alert in AlertService.alerts\" type=\"{{alert.type}}\" close=\"closeAlert($index)\"\u003E\u003Cspan class=\"icon-innov-prev alert-icon\" ng-show=\"alert.type==='info' || alert.isHtml\" ng-bind-html=\"alert.message\"\u003E\u003C\u002Fspan\u003E\u003Cspan ng-hide=\"alert.type==='info' || alert.isHtml\"\u003E{{alert.message}}\u003C\u002Fspan\u003E\u003C\u002Fuib-alert\u003E\u003C\u002Fdiv\u003E";;return pug_html;};
+	module.exports = template;
+
+/***/ },
+/* 46 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var pug = __webpack_require__(1);
+
+	function template(locals) {var pug_html = "", pug_mixins = {}, pug_interp;pug_html = pug_html + "\u003Cdiv class=\"chat\" ng-show=\"showChat\"\u003E\u003Ciframe style=\"display: none;\" ng-src=\"{{chatHackUrl}}\"\u003E\u003C\u002Fiframe\u003E\u003Ca class=\"link\" ng-show=\"chatAvailable\" ng-click=\"openChatWindow()\" style=\"cursor: pointer;\"\u003E{{'Chat with Support'|translate}}&nbsp;\u003C!--i.fa.fa-comments--\u003E\u003C\u002Fa\u003E\u003Cspan ng-show=\"!chatAvailable\" disabled\u003E{{'Chat Offline'|translate}}&nbsp;\u003C!--i.fa.fa-comments--\u003E\u003C\u002Fspan\u003E\u003C\u002Fdiv\u003E";;return pug_html;};
+	module.exports = template;
+
+/***/ },
+/* 47 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var pug = __webpack_require__(1);
+
+	function template(locals) {var pug_html = "", pug_mixins = {}, pug_interp;pug_html = pug_html + "\u003Cdiv rha-403error=\"\"\u003E\u003C\u002Fdiv\u003E\u003Cdiv rha-404error=\"\"\u003E\u003C\u002Fdiv\u003E\u003Cdiv ng-show=\"HeaderService.sfdcIsHealthy\"\u003E\u003C\u002Fdiv\u003E\u003Cdiv rha-alert=\"\"\u003E\u003C\u002Fdiv\u003E\u003Cdiv ng-hide=\"failedToLoadCase || !securityService.loginStatus.userAllowedToManageCases\"\u003E\u003Cdiv class=\"spinner spinner-inline\" ng-show=\"pageLoading\"\u003E\u003C\u002Fdiv\u003E\u003C\u002Fdiv\u003E\u003Cdiv class=\"page-header\" ng-hide=\"HeaderService.pageLoadFailure || !securityService.loginStatus.userAllowedToManageCases\"\u003E\u003Cdiv ng-hide=\"page ===&quot;&quot;\" rha-titletemplate=\"\" page=\"{{page}}\"\u003E\u003C\u002Fdiv\u003E\u003Cdiv ng-show=\"page === &quot;caseView&quot;\"\u003EFiled on&nbsp;\u003C\u002Fdiv\u003E\u003Cdiv ng-show=\"securityService.loginStatus.isLoggedIn &amp;&amp; securityService.loginStatus.authedUser.has_chat &amp;&amp; HeaderService.sfdcIsHealthy\" rha-chatbutton=\"\"\u003E\u003C\u002Fdiv\u003E\u003C\u002Fdiv\u003E\u003Cdiv rha-loginstatus=\"\"\u003E\u003C\u002Fdiv\u003E\u003Cdiv ng-show=\"!HeaderService.sfdcIsHealthy\" ng-bind-html=\"parseSfdcOutageHtml()\"\u003E\u003C\u002Fdiv\u003E";;return pug_html;};
+	module.exports = template;
+
+/***/ },
+/* 48 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var pug = __webpack_require__(1);
+
+	function template(locals) {var pug_html = "", pug_mixins = {}, pug_interp;pug_html = pug_html + "\u003Ch1 class=\"page-title\" ng-show=\"COMMON_CONFIG.showTitle\"\u003E{{getPageTitle()}}\u003C\u002Fh1\u003E";;return pug_html;};
+	module.exports = template;
+
+/***/ },
+/* 49 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var pug = __webpack_require__(1);
+
+	function template(locals) {var pug_html = "", pug_mixins = {}, pug_interp;pug_html = pug_html + "\u003Cdiv class=\"modal-header\" id=\"rha-login-modal-header\"\u003E\u003Ch3 translate=\"\"\u003ESign into the Red Hat Customer Portal\u003C\u002Fh3\u003E\u003C\u002Fdiv\u003E\u003Cdiv class=\"container-fluid\"\u003E\u003Cdiv class=\"modal-body form-horizontal\" id=\"rha-login-modal-body\"\u003E\u003C!-- form ng-submit=\"modalOptions.ok()\"  method=\"post\"--\u003E\u003Cdiv class=\"form-group\" ng-show=\"useVerboseLoginView\"\u003E{{'Red Hat Access makes it easy for you to self-solve issues, diagnose problems, and engage with us via the Red Hat Customer Portal. To access Red Hat Customer Portal resources, you must enter valid portal credentials.'|translate}}\u003C\u002Fdiv\u003E\u003Cdiv class=\"alert alert-danger\" ng-show=\"authError\"\u003E{{authError}}\u003C\u002Fdiv\u003E\u003Cdiv class=\"form-group\" id=\"rha-login-modal-user-id\"\u003E\u003Clabel class=\"control-label\" for=\"rha-login-user-id\" translate=\"\"\u003ERed Hat Login\u003C\u002Flabel\u003E\u003Cdiv\u003E\u003Cinput class=\"form-control\" id=\"rha-login-user-id\" type=\"text\" placeholder=\"{{'Red Hat Login'|translate}}\" ng-model=\"user.user\" required=\"\" autofocus=\"\"\u003E\u003C\u002Fdiv\u003E\u003C\u002Fdiv\u003E\u003Cdiv class=\"form-group\" id=\"rha-login-modal-user-pass\"\u003E\u003Clabel class=\"control-label\" for=\"rha-login-password\" translate=\"\"\u003EPassword\u003C\u002Flabel\u003E\u003Cdiv\u003E\u003Cinput class=\"form-control\" id=\"rha-login-password\" type=\"password\" placeholder=\"{{'Password'|translate}}\" ng-model=\"user.password\" required=\"\"\u003E\u003C\u002Fdiv\u003E\u003C\u002Fdiv\u003E\u003Cdiv class=\"form-group\" style=\"font-size:smaller;\" ng-show=\"useVerboseLoginView\"\u003E\u003Cstrong\u003E{{'Note:'|translate}}\u003C\u002Fstrong\u003E{{'Red Hat Customer Portal credentials differ from the credentials used to log into this product.'|translate}}\u003C\u002Fdiv\u003E\u003C!-- \u002Fform--\u003E\u003C\u002Fdiv\u003E\u003Cdiv class=\"modal-footer\"\u003E\u003Cdiv class=\"form-group\" id=\"rha-login-modal-buttons\"\u003E\u003Cspan class=\"pull-right\"\u003E\u003Cbutton class=\"btn btn-md cancel\" ng-click=\"modalOptions.close()\" type=\"submit\" translate=\"\"\u003ECancel\u003C\u002Fbutton\u003E\u003Cbutton class=\"btn btn-primary btn-md login\" ng-click=\"modalOptions.ok()\" type=\"submit\" translate=\"\" ng-disabled=\"status.authenticating\"\u003ESign in\u003C\u002Fbutton\u003E\u003C\u002Fspan\u003E\u003C\u002Fdiv\u003E\u003C\u002Fdiv\u003E\u003C\u002Fdiv\u003E";;return pug_html;};
+	module.exports = template;
+
+/***/ },
+/* 50 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var pug = __webpack_require__(1);
+
+	function template(locals) {var pug_html = "", pug_mixins = {}, pug_interp;pug_html = pug_html + "\u003Cdiv ng-controller=\"SecurityController\" ng-show=\"displayLoginStatus()\"\u003E\u003Cdiv class=\"row\"\u003E\u003Cdiv class=\"col-sm-12\"\u003E\u003Cspan class=\"pull-right rha-logged-in\" ng-show=\"securityService.loginStatus.isLoggedIn\"\u003E{{'Logged into the Red Hat Customer Portal as'|translate}} {{securityService.loginStatus.authedUser.loggedInUser}}  \u003Cspan ng-if=\"securityService.logoutURL.length === 0\" ng-show=\"!securityService.loginStatus.verifying\"\u003E\u003Ca href=\"\" ng-click=\"securityService.logout()\"\u003E {{'Log Out'|translate}}\u003C\u002Fa\u003E\u003C\u002Fspan\u003E\u003Cspan ng-if=\"securityService.logoutURL.length &gt; 0\" ng-show=\"!securityService.loginStatus.verifying\"\u003E\u003Ca href=\"{{securityService.logoutURL}}\"\u003E {{'Log Out'|translate}}\u003C\u002Fa\u003E\u003C\u002Fspan\u003E\u003Cspan ng-show=\"securityService.loginStatus.verifying\"\u003E{{'Log Out'|translate}}\u003C\u002Fspan\u003E\u003C\u002Fspan\u003E\u003Cspan class=\"pull-right rha-logged-out\" ng-show=\"!securityService.loginStatus.isLoggedIn\"\u003E{{'Not Logged into the Red Hat Customer Portal'|translate}} \u003Cspan ng-if=\"securityService.loginURL.length === 0\" ng-show=\"!securityService.loginStatus.verifying\"\u003E\u003Ca href=\"\" ng-click=\"securityService.login()\"\u003E {{'Log In'|translate}}\u003C\u002Fa\u003E\u003C\u002Fspan\u003E\u003Cspan ng-if=\"securityService.loginURL.length &gt; 0\" ng-show=\"!securityService.loginStatus.verifying\"\u003E\u003Ca href=\"{{securityService.loginURL}}\"\u003E {{'Log In'|translate}}\u003C\u002Fa\u003E\u003C\u002Fspan\u003E\u003Cspan ng-show=\"securityService.loginStatus.verifying\"\u003E{{'Log In'|translate}}\u003C\u002Fspan\u003E\u003C\u002Fspan\u003E\u003C\u002Fdiv\u003E\u003C\u002Fdiv\u003E\u003C\u002Fdiv\u003E";;return pug_html;};
+	module.exports = template;
+
+/***/ },
 /* 51 */
 /***/ function(module, exports) {
 
@@ -3723,17 +3665,17 @@
 
 		var __WEBPACK_AMD_DEFINE_FACTORY__, __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;(function (global, factory) {
 		    if (true) {
-		        !(__WEBPACK_AMD_DEFINE_ARRAY__ = [exports], __WEBPACK_AMD_DEFINE_FACTORY__ = (factory), __WEBPACK_AMD_DEFINE_RESULT__ = (typeof __WEBPACK_AMD_DEFINE_FACTORY__ === 'function' ? (__WEBPACK_AMD_DEFINE_FACTORY__.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__)) : __WEBPACK_AMD_DEFINE_FACTORY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+		        !(__WEBPACK_AMD_DEFINE_ARRAY__ = [exports, __webpack_require__(1)], __WEBPACK_AMD_DEFINE_FACTORY__ = (factory), __WEBPACK_AMD_DEFINE_RESULT__ = (typeof __WEBPACK_AMD_DEFINE_FACTORY__ === 'function' ? (__WEBPACK_AMD_DEFINE_FACTORY__.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__)) : __WEBPACK_AMD_DEFINE_FACTORY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
 		    } else if (typeof exports !== "undefined") {
-		        factory(exports);
+		        factory(exports, require('jsuri'));
 		    } else {
 		        var mod = {
 		            exports: {}
 		        };
-		        factory(mod.exports);
+		        factory(mod.exports, global.jsuri);
 		        global.uds = mod.exports;
 		    }
-		})(this, function (exports) {
+		})(this, function (exports, Uri) {
 		    'use strict';
 
 		    Object.defineProperty(exports, "__esModule", {
@@ -3756,7 +3698,6 @@
 		    exports.updateCaseDetails = updateCaseDetails;
 		    exports.updateCaseOwner = updateCaseOwner;
 		    exports.fetchCaseHistory = fetchCaseHistory;
-		    exports.addAssociates = addAssociates;
 		    exports.getCQIQuestions = getCQIQuestions;
 		    exports.getCQIs = getCQIs;
 		    exports.postCQIScore = postCQIScore;
@@ -3787,10 +3728,11 @@
 		    exports.getCaseContactsForAccount = getCaseContactsForAccount;
 		    exports.getCaseGroupsForContact = getCaseGroupsForContact;
 		    exports.getRMECountForAccount = getRMECountForAccount;
+		    exports.addAssociates = addAssociates;
 		    exports.deleteAssociates = deleteAssociates;
-		    exports.updateCaseAssociate = updateCaseAssociate;
 		    exports.fetchSolutionDetails = fetchSolutionDetails;
 		    exports.setHandlingSystem = setHandlingSystem;
+		    exports.fetchKCSFromDrupal = fetchKCSFromDrupal;
 		    exports.fetchSolr = fetchSolr;
 		    exports.fetchCaseSolr = fetchCaseSolr;
 		    exports.addCaseSbrs = addCaseSbrs;
@@ -3823,18 +3765,24 @@
 		    exports.addNNOToUser = addNNOToUser;
 		    exports.removeNNOsFromUser = removeNNOsFromUser;
 		    exports.setGbdSuperRegion = setGbdSuperRegion;
+		    exports.setOutOfOfficeflag = setOutOfOfficeflag;
+		    exports.updateResourceLink = updateResourceLink;
+		    exports.updateNightShiftForUser = updateNightShiftForUser;
+		    exports.updateCaseAttachment = updateCaseAttachment;
+
+
 		    var udsHostName = new Uri('https://unified-ds-ci.gsslab.brq.redhat.com/');
 
-		    if (window.location.hostname === 'access.redhat.com' || window.location.hostname === 'prod.foo.redhat.com' || window.location.hostname === 'fooprod.redhat.com') {
+		    if (window.location.hostname === 'access.redhat.com' || window.location.hostname === 'prod.foo.redhat.com' || window.location.hostname === 'fooprod.redhat.com' || window.location.hostname === 'skedge.redhat.com') {
 		        udsHostName = new Uri('https://unified-ds.gsslab.rdu2.redhat.com/');
 		    } else {
-		        if (window.location.hostname === 'access.qa.redhat.com' || window.location.hostname === 'qa.foo.redhat.com' || window.location.hostname === 'fooqa.redhat.com') {
+		        if (window.location.hostname === 'access.qa.redhat.com' || window.location.hostname === 'qa.foo.redhat.com' || window.location.hostname === 'fooqa.redhat.com' || window.location.hostname === 'skedge.qa.redhat.com') {
 		            udsHostName = new Uri('https://unified-ds-qa.gsslab.pnq2.redhat.com/');
 		        } else {
-		            if (window.location.hostname === 'access.devgssci.devlab.phx1.redhat.com' || window.location.hostname === 'ci.foo.redhat.com' || window.location.hostname === 'fooci.redhat.com') {
+		            if (window.location.hostname === 'access.devgssci.devlab.phx1.redhat.com' || window.location.hostname === 'ci.foo.redhat.com' || window.location.hostname === 'fooci.redhat.com' || window.location.hostname === 'skedge.ci.redhat.com') {
 		                udsHostName = new Uri('https://unified-ds-ci.gsslab.brq.redhat.com/');
 		            } else {
-		                if (window.location.hostname === 'access.stage.redhat.com' || window.location.hostname === 'stage.foo.redhat.com' || window.location.hostname === 'foostage.redhat.com') {
+		                if (window.location.hostname === 'access.stage.redhat.com' || window.location.hostname === 'stage.foo.redhat.com' || window.location.hostname === 'foostage.redhat.com' || window.location.hostname === 'skedge.stage.redhat.com') {
 		                    udsHostName = new Uri('https://unified-ds-stage.gsslab.pnq2.redhat.com/');
 		                }
 		            }
@@ -4027,11 +3975,6 @@
 		        return executeUdsAjaxCall(url, 'GET');
 		    }
 
-		    function addAssociates(caseId, jsonAssociates) {
-		        var url = udsHostName.clone().setPath('/case/' + caseId + "/associate");
-		        return executeUdsAjaxCallWithData(url, jsonAssociates, 'POST');
-		    }
-
 		    function getCQIQuestions(caseNumber) {
 		        var url = udsHostName.clone().setPath('/case/' + caseNumber + '/reviews/questions');
 		        return executeUdsAjaxCall(url, 'GET');
@@ -4201,14 +4144,14 @@
 		        return executeUdsAjaxCall(url, 'GET');
 		    }
 
-		    function deleteAssociates(caseId, associateId) {
-		        var url = udsHostName.clone().setPath('/case/' + caseId + '/associate/' + associateId);
-		        return executeUdsAjaxCall(url, 'DELETE');
+		    function addAssociates(caseNumber, jsonAssociates) {
+		        var url = udsHostName.clone().setPath('/case/' + caseNumber + "/associate");
+		        return executeUdsAjaxCallWithData(url, jsonAssociates, 'POST');
 		    }
 
-		    function updateCaseAssociate(caseId, jsonAssociates) {
-		        var url = udsHostName.clone().setPath('/case/' + caseId + "/associate");
-		        return executeUdsAjaxCallWithData(url, jsonAssociates, 'PUT');
+		    function deleteAssociates(caseNumber, jsonAssociates) {
+		        var url = udsHostName.clone().setPath('/case/' + caseNumber + "/associate");
+		        return executeUdsAjaxCallWithData(url, jsonAssociates, 'DELETE');
 		    }
 
 		    function fetchSolutionDetails(solutionIdQuery) {
@@ -4220,6 +4163,11 @@
 		    function setHandlingSystem(caseNumber, handlingSystemArray) {
 		        var url = udsHostName.clone().setPath('/case/' + caseNumber + "/handlingsystems");
 		        return executeUdsAjaxCallWithData(url, handlingSystemArray, 'PUT');
+		    }
+
+		    function fetchKCSFromDrupal(id) {
+		        var url = udsHostName.clone().setPath('/documentation/drupalapi/' + id);
+		        return executeUdsAjaxCall(url, 'GET');
 		    }
 
 		    function fetchSolr(query) {
@@ -4414,7 +4362,7 @@
 
 		    function addNNOToUser(userId, nnoRegion) {
 		        var url = udsHostName.clone().setPath('/user/' + userId + '/nnoregion/' + nnoRegion);
-		        executeUdsAjaxCall(url, 'POST');
+		        return executeUdsAjaxCall(url, 'POST');
 		    }
 
 		    function removeNNOsFromUser(userId, query) {
@@ -4426,7 +4374,493 @@
 		        var url = udsHostName.clone().setPath('/user/' + userId + '/virtualoffice/' + value);
 		        return executeUdsAjaxCall(url, 'PUT');
 		    }
+
+		    function setOutOfOfficeflag(userId, value) {
+		        var url = udsHostName.clone().setPath('/user/' + userId + '/out-of-office');
+		        return executeUdsAjaxCallWithData(url, value, 'POST');
+		    }
+
+		    function updateResourceLink(caseNumber, resourceLink) {
+		        var url = udsHostName.clone().setPath('/case/' + caseNumber + '/resourcelink');
+		        return executeUdsAjaxCallWithData(url, resourceLink, 'PUT');
+		    }
+
+		    function updateNightShiftForUser(userId, value) {
+		        var url = udsHostName.clone().setPath('/user/' + userId + '/nightshift/' + value);
+		        return executeUdsAjaxCall(url, 'PUT');
+		    }
+
+		    function updateCaseAttachment(caseNumber, attachmentId, attachmentDetails) {
+		        var url = udsHostName.clone().setPath('/case/' + caseNumber + '/attachment/' + attachmentId);
+		        return executeUdsAjaxCallWithData(url, attachmentDetails, 'PUT');
+		    }
 		});
+
+	/***/ },
+	/* 1 */
+	/***/ function(module, exports, __webpack_require__) {
+
+		var __WEBPACK_AMD_DEFINE_RESULT__;/*!
+		 * jsUri
+		 * https://github.com/derek-watson/jsUri
+		 *
+		 * Copyright 2013, Derek Watson
+		 * Released under the MIT license.
+		 *
+		 * Includes parseUri regular expressions
+		 * http://blog.stevenlevithan.com/archives/parseuri
+		 * Copyright 2007, Steven Levithan
+		 * Released under the MIT license.
+		 */
+
+		 /*globals define, module */
+
+		(function(global) {
+
+		  var re = {
+		    starts_with_slashes: /^\/+/,
+		    ends_with_slashes: /\/+$/,
+		    pluses: /\+/g,
+		    query_separator: /[&;]/,
+		    uri_parser: /^(?:(?![^:@]+:[^:@\/]*@)([^:\/?#.]+):)?(?:\/\/)?((?:(([^:@\/]*)(?::([^:@]*))?)?@)?(\[[0-9a-fA-F:.]+\]|[^:\/?#]*)(?::(\d+|(?=:)))?(:)?)((((?:[^?#](?![^?#\/]*\.[^?#\/.]+(?:[?#]|$)))*\/?)?([^?#\/]*))(?:\?([^#]*))?(?:#(.*))?)/
+		  };
+
+		  /**
+		   * Define forEach for older js environments
+		   * @see https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Array/forEach#Compatibility
+		   */
+		  if (!Array.prototype.forEach) {
+		    Array.prototype.forEach = function(callback, thisArg) {
+		      var T, k;
+
+		      if (this == null) {
+		        throw new TypeError(' this is null or not defined');
+		      }
+
+		      var O = Object(this);
+		      var len = O.length >>> 0;
+
+		      if (typeof callback !== "function") {
+		        throw new TypeError(callback + ' is not a function');
+		      }
+
+		      if (arguments.length > 1) {
+		        T = thisArg;
+		      }
+
+		      k = 0;
+
+		      while (k < len) {
+		        var kValue;
+		        if (k in O) {
+		          kValue = O[k];
+		          callback.call(T, kValue, k, O);
+		        }
+		        k++;
+		      }
+		    };
+		  }
+
+		  /**
+		   * unescape a query param value
+		   * @param  {string} s encoded value
+		   * @return {string}   decoded value
+		   */
+		  function decode(s) {
+		    if (s) {
+		        s = s.toString().replace(re.pluses, '%20');
+		        s = decodeURIComponent(s);
+		    }
+		    return s;
+		  }
+
+		  /**
+		   * Breaks a uri string down into its individual parts
+		   * @param  {string} str uri
+		   * @return {object}     parts
+		   */
+		  function parseUri(str) {
+		    var parser = re.uri_parser;
+		    var parserKeys = ["source", "protocol", "authority", "userInfo", "user", "password", "host", "port", "isColonUri", "relative", "path", "directory", "file", "query", "anchor"];
+		    var m = parser.exec(str || '');
+		    var parts = {};
+
+		    parserKeys.forEach(function(key, i) {
+		      parts[key] = m[i] || '';
+		    });
+
+		    return parts;
+		  }
+
+		  /**
+		   * Breaks a query string down into an array of key/value pairs
+		   * @param  {string} str query
+		   * @return {array}      array of arrays (key/value pairs)
+		   */
+		  function parseQuery(str) {
+		    var i, ps, p, n, k, v, l;
+		    var pairs = [];
+
+		    if (typeof(str) === 'undefined' || str === null || str === '') {
+		      return pairs;
+		    }
+
+		    if (str.indexOf('?') === 0) {
+		      str = str.substring(1);
+		    }
+
+		    ps = str.toString().split(re.query_separator);
+
+		    for (i = 0, l = ps.length; i < l; i++) {
+		      p = ps[i];
+		      n = p.indexOf('=');
+
+		      if (n !== 0) {
+		        k = decode(p.substring(0, n));
+		        v = decode(p.substring(n + 1));
+		        pairs.push(n === -1 ? [p, null] : [k, v]);
+		      }
+
+		    }
+		    return pairs;
+		  }
+
+		  /**
+		   * Creates a new Uri object
+		   * @constructor
+		   * @param {string} str
+		   */
+		  function Uri(str) {
+		    this.uriParts = parseUri(str);
+		    this.queryPairs = parseQuery(this.uriParts.query);
+		    this.hasAuthorityPrefixUserPref = null;
+		  }
+
+		  /**
+		   * Define getter/setter methods
+		   */
+		  ['protocol', 'userInfo', 'host', 'port', 'path', 'anchor'].forEach(function(key) {
+		    Uri.prototype[key] = function(val) {
+		      if (typeof val !== 'undefined') {
+		        this.uriParts[key] = val;
+		      }
+		      return this.uriParts[key];
+		    };
+		  });
+
+		  /**
+		   * if there is no protocol, the leading // can be enabled or disabled
+		   * @param  {Boolean}  val
+		   * @return {Boolean}
+		   */
+		  Uri.prototype.hasAuthorityPrefix = function(val) {
+		    if (typeof val !== 'undefined') {
+		      this.hasAuthorityPrefixUserPref = val;
+		    }
+
+		    if (this.hasAuthorityPrefixUserPref === null) {
+		      return (this.uriParts.source.indexOf('//') !== -1);
+		    } else {
+		      return this.hasAuthorityPrefixUserPref;
+		    }
+		  };
+
+		  Uri.prototype.isColonUri = function (val) {
+		    if (typeof val !== 'undefined') {
+		      this.uriParts.isColonUri = !!val;
+		    } else {
+		      return !!this.uriParts.isColonUri;
+		    }
+		  };
+
+		  /**
+		   * Serializes the internal state of the query pairs
+		   * @param  {string} [val]   set a new query string
+		   * @return {string}         query string
+		   */
+		  Uri.prototype.query = function(val) {
+		    var s = '', i, param, l;
+
+		    if (typeof val !== 'undefined') {
+		      this.queryPairs = parseQuery(val);
+		    }
+
+		    for (i = 0, l = this.queryPairs.length; i < l; i++) {
+		      param = this.queryPairs[i];
+		      if (s.length > 0) {
+		        s += '&';
+		      }
+		      if (param[1] === null) {
+		        s += param[0];
+		      } else {
+		        s += param[0];
+		        s += '=';
+		        if (typeof param[1] !== 'undefined') {
+		          s += encodeURIComponent(param[1]);
+		        }
+		      }
+		    }
+		    return s.length > 0 ? '?' + s : s;
+		  };
+
+		  /**
+		   * returns the first query param value found for the key
+		   * @param  {string} key query key
+		   * @return {string}     first value found for key
+		   */
+		  Uri.prototype.getQueryParamValue = function (key) {
+		    var param, i, l;
+		    for (i = 0, l = this.queryPairs.length; i < l; i++) {
+		      param = this.queryPairs[i];
+		      if (key === param[0]) {
+		        return param[1];
+		      }
+		    }
+		  };
+
+		  /**
+		   * returns an array of query param values for the key
+		   * @param  {string} key query key
+		   * @return {array}      array of values
+		   */
+		  Uri.prototype.getQueryParamValues = function (key) {
+		    var arr = [], i, param, l;
+		    for (i = 0, l = this.queryPairs.length; i < l; i++) {
+		      param = this.queryPairs[i];
+		      if (key === param[0]) {
+		        arr.push(param[1]);
+		      }
+		    }
+		    return arr;
+		  };
+
+		  /**
+		   * removes query parameters
+		   * @param  {string} key     remove values for key
+		   * @param  {val}    [val]   remove a specific value, otherwise removes all
+		   * @return {Uri}            returns self for fluent chaining
+		   */
+		  Uri.prototype.deleteQueryParam = function (key, val) {
+		    var arr = [], i, param, keyMatchesFilter, valMatchesFilter, l;
+
+		    for (i = 0, l = this.queryPairs.length; i < l; i++) {
+
+		      param = this.queryPairs[i];
+		      keyMatchesFilter = decode(param[0]) === decode(key);
+		      valMatchesFilter = param[1] === val;
+
+		      if ((arguments.length === 1 && !keyMatchesFilter) || (arguments.length === 2 && (!keyMatchesFilter || !valMatchesFilter))) {
+		        arr.push(param);
+		      }
+		    }
+
+		    this.queryPairs = arr;
+
+		    return this;
+		  };
+
+		  /**
+		   * adds a query parameter
+		   * @param  {string}  key        add values for key
+		   * @param  {string}  val        value to add
+		   * @param  {integer} [index]    specific index to add the value at
+		   * @return {Uri}                returns self for fluent chaining
+		   */
+		  Uri.prototype.addQueryParam = function (key, val, index) {
+		    if (arguments.length === 3 && index !== -1) {
+		      index = Math.min(index, this.queryPairs.length);
+		      this.queryPairs.splice(index, 0, [key, val]);
+		    } else if (arguments.length > 0) {
+		      this.queryPairs.push([key, val]);
+		    }
+		    return this;
+		  };
+
+		  /**
+		   * test for the existence of a query parameter
+		   * @param  {string}  key        add values for key
+		   * @param  {string}  val        value to add
+		   * @param  {integer} [index]    specific index to add the value at
+		   * @return {Uri}                returns self for fluent chaining
+		   */
+		  Uri.prototype.hasQueryParam = function (key) {
+		    var i, len = this.queryPairs.length;
+		    for (i = 0; i < len; i++) {
+		      if (this.queryPairs[i][0] == key)
+		        return true;
+		    }
+		    return false;
+		  };
+
+		  /**
+		   * replaces query param values
+		   * @param  {string} key         key to replace value for
+		   * @param  {string} newVal      new value
+		   * @param  {string} [oldVal]    replace only one specific value (otherwise replaces all)
+		   * @return {Uri}                returns self for fluent chaining
+		   */
+		  Uri.prototype.replaceQueryParam = function (key, newVal, oldVal) {
+		    var index = -1, len = this.queryPairs.length, i, param;
+
+		    if (arguments.length === 3) {
+		      for (i = 0; i < len; i++) {
+		        param = this.queryPairs[i];
+		        if (decode(param[0]) === decode(key) && decodeURIComponent(param[1]) === decode(oldVal)) {
+		          index = i;
+		          break;
+		        }
+		      }
+		      if (index >= 0) {
+		        this.deleteQueryParam(key, decode(oldVal)).addQueryParam(key, newVal, index);
+		      }
+		    } else {
+		      for (i = 0; i < len; i++) {
+		        param = this.queryPairs[i];
+		        if (decode(param[0]) === decode(key)) {
+		          index = i;
+		          break;
+		        }
+		      }
+		      this.deleteQueryParam(key);
+		      this.addQueryParam(key, newVal, index);
+		    }
+		    return this;
+		  };
+
+		  /**
+		   * Define fluent setter methods (setProtocol, setHasAuthorityPrefix, etc)
+		   */
+		  ['protocol', 'hasAuthorityPrefix', 'isColonUri', 'userInfo', 'host', 'port', 'path', 'query', 'anchor'].forEach(function(key) {
+		    var method = 'set' + key.charAt(0).toUpperCase() + key.slice(1);
+		    Uri.prototype[method] = function(val) {
+		      this[key](val);
+		      return this;
+		    };
+		  });
+
+		  /**
+		   * Scheme name, colon and doubleslash, as required
+		   * @return {string} http:// or possibly just //
+		   */
+		  Uri.prototype.scheme = function() {
+		    var s = '';
+
+		    if (this.protocol()) {
+		      s += this.protocol();
+		      if (this.protocol().indexOf(':') !== this.protocol().length - 1) {
+		        s += ':';
+		      }
+		      s += '//';
+		    } else {
+		      if (this.hasAuthorityPrefix() && this.host()) {
+		        s += '//';
+		      }
+		    }
+
+		    return s;
+		  };
+
+		  /**
+		   * Same as Mozilla nsIURI.prePath
+		   * @return {string} scheme://user:password@host:port
+		   * @see  https://developer.mozilla.org/en/nsIURI
+		   */
+		  Uri.prototype.origin = function() {
+		    var s = this.scheme();
+
+		    if (this.userInfo() && this.host()) {
+		      s += this.userInfo();
+		      if (this.userInfo().indexOf('@') !== this.userInfo().length - 1) {
+		        s += '@';
+		      }
+		    }
+
+		    if (this.host()) {
+		      s += this.host();
+		      if (this.port() || (this.path() && this.path().substr(0, 1).match(/[0-9]/))) {
+		        s += ':' + this.port();
+		      }
+		    }
+
+		    return s;
+		  };
+
+		  /**
+		   * Adds a trailing slash to the path
+		   */
+		  Uri.prototype.addTrailingSlash = function() {
+		    var path = this.path() || '';
+
+		    if (path.substr(-1) !== '/') {
+		      this.path(path + '/');
+		    }
+
+		    return this;
+		  };
+
+		  /**
+		   * Serializes the internal state of the Uri object
+		   * @return {string}
+		   */
+		  Uri.prototype.toString = function() {
+		    var path, s = this.origin();
+
+		    if (this.isColonUri()) {
+		      if (this.path()) {
+		        s += ':'+this.path();
+		      }
+		    } else if (this.path()) {
+		      path = this.path();
+		      if (!(re.ends_with_slashes.test(s) || re.starts_with_slashes.test(path))) {
+		        s += '/';
+		      } else {
+		        if (s) {
+		          s.replace(re.ends_with_slashes, '/');
+		        }
+		        path = path.replace(re.starts_with_slashes, '/');
+		      }
+		      s += path;
+		    } else {
+		      if (this.host() && (this.query().toString() || this.anchor())) {
+		        s += '/';
+		      }
+		    }
+		    if (this.query().toString()) {
+		      s += this.query().toString();
+		    }
+
+		    if (this.anchor()) {
+		      if (this.anchor().indexOf('#') !== 0) {
+		        s += '#';
+		      }
+		      s += this.anchor();
+		    }
+
+		    return s;
+		  };
+
+		  /**
+		   * Clone a Uri object
+		   * @return {Uri} duplicate copy of the Uri
+		   */
+		  Uri.prototype.clone = function() {
+		    return new Uri(this.toString());
+		  };
+
+		  /**
+		   * export via AMD or CommonJS, otherwise leak a global
+		   */
+		  if (true) {
+		    !(__WEBPACK_AMD_DEFINE_RESULT__ = function() {
+		      return Uri;
+		    }.call(exports, __webpack_require__, exports, module), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+		  } else if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
+		    module.exports = Uri;
+		  } else {
+		    global.Uri = Uri;
+		  }
+		}(this));
+
 
 	/***/ }
 	/******/ ])
